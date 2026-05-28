@@ -178,6 +178,11 @@ Todo SKILL.md do ecossistema deve ter obrigatoriamente:
 - Seção PROTOCOLO DE EXECUÇÃO com etapas numeradas
 - Etapa obrigatória de leitura do sumario.md e nomenclatura.md
 - Etapa obrigatória de verificação própria no sumário
+- Seção REGRA DE ACENTUAÇÃO (copiar da seção homônima desta skill)
+
+ATENÇÃO: toda skill que gera documentos DOCX/PDF deve incluir
+obrigatoriamente a seção REGRA DE ACENTUAÇÃO. Copie o bloco completo
+desta skill para o SKILL.md da nova skill antes de criar o arquivo.
 
 **6.4 — Criar backlog-versoes.md**
 
@@ -249,3 +254,83 @@ projeto no Claude para ativá-la.
 - **Se o sumário estiver desatualizado** em relação ao que o usuário
   descreve, aponte a inconsistência e solicite autorização para corrigir
   antes de prosseguir.
+
+
+---
+
+## REGRA DE ACENTUAÇÃO — DOCUMENTOS EM PORTUGUÊS
+
+Todo documento gerado por esta skill deve passar obrigatoriamente pelo
+processo de correção de acentuação antes da entrega. Sem exceção.
+
+### Por que esta regra existe
+
+O pipeline Node.js + docx library + LibreOffice não garante preservação
+de acentuação UTF-8 de forma consistente. Palavras acentuadas no código
+fonte podem ser corrompidas no ambiente de execução restrito, resultando
+em documentos com mistura de palavras acentuadas e não acentuadas —
+aspecto incompatível com documentos institucionais.
+
+### Protocolo obrigatório de correção (3 etapas)
+
+**Etapa A — Substituição global no script de geração**
+
+Antes de executar o script, aplicar substituição global. Cobertura mínima:
+
+Substantivos institucionais: gestão, revisão, seção, informação, saúde,
+versão, aprovação, análise, transformação, ação, ações, execução,
+elaboração, integração, competência, competências, governança, deliberação,
+publicação, comunicação, legislação, solicitação, manutenção, atualização,
+identificação, consolidação, avaliação, decisão, criação, distribuição,
+capacitação, certificação
+
+Adjetivos: estratégico/a/os/as, técnico/a/os/as, específico/a/os/as,
+público/a/os/as, básico/a/os/as, crítico/a/os/as, histórico/a/os/as,
+obrigatório/a/os/as, próprio/a/os/as, único/a/os/as, próximo/a/os/as
+
+Palavras funcionais: não, também, além, após, há, está, órgão, órgãos,
+área, áreas, número, números, índice, índices
+
+Nomes institucionais: Fórum de Subsecretários, Transformação Digital,
+Saúde Digital, Secretaria de Estado de Saúde, Instrumento de Análise
+Comparativa
+
+**Etapa B — Correção individual de títulos de seção**
+
+Verificar e corrigir cada título individualmente após a substituição
+global. Títulos usam função separada e frequentemente escapam da
+substituição global.
+
+**Etapa C — Verificação automática do DOCX gerado**
+
+Após gerar o DOCX e antes de converter para PDF:
+
+```python
+import zipfile, xml.etree.ElementTree as ET
+with zipfile.ZipFile("arquivo.docx") as z:
+    with z.open("word/document.xml") as f:
+        tree = ET.parse(f)
+root = tree.getroot()
+ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+full = " ".join(t.text for t in root.iter(ns+"t") if t.text)
+sem_acento = [
+    "gestao","revisao","secao","informacao","saude","versao",
+    "aprovacao","analise","transformacao","nao ","recomendacao",
+    "convergencia","conclusao","indice ","forum ","deliberacao",
+    "governanca","competencia","execucao","elaboracao","integracao",
+    "publicacao","comunicacao","atualizacao","avaliacao","decisao"
+]
+encontradas = [w for w in sem_acento if w in full.lower()]
+if encontradas:
+    print(f"ATENÇÃO — palavras sem acento: {encontradas}")
+else:
+    print("Verificação OK — acentuação correta")
+```
+
+Se encontrar palavras sem acento, corrigir com substituição por contexto
+e repetir a geração antes de prosseguir.
+
+### Regra de entrega
+
+Nunca entregar documento sem as 3 etapas concluídas.
+A conversão para PDF só ocorre após Etapa C confirmar zero ocorrências.

@@ -45,3 +45,9 @@ nos pontos críticos antes de executar ações irreversíveis.
 | Versão | Data | Descrição |
 |---|---|---|
 | v1.0 | 2026-05-26 | Criação inicial da skill |
+
+---
+
+## Navegação rápida
+
+→ **[INDICE.md](./INDICE.md)** — mapa completo de todos os arquivos deste repositório

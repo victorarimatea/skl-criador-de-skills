@@ -1,7 +1,7 @@
 # skill-criador-de-skills
 
 **Versão:** v1.0 — 2026-05-26
-**Repositório:** https://github.com/victorarimatea/skill-criador-de-skills
+**Repositório:** https://github.com/victorarimatea/skl-criador-de-skills
 **Mantenedor:** victorarimatea
 
 Esta skill cria novas skills no ecossistema DTD/SETIS via API do GitHub,
@@ -13,8 +13,8 @@ garantindo conformidade com as Matrizes de Nomenclatura e Sumário.
 
 - **Usuário GitHub:** victorarimatea
 - **Repositório âncora:** ecossistema-sumario
-- **URL do sumário:** https://raw.githubusercontent.com/victorarimatea/ecossistema-sumario/main/sumario.md
-- **URL da nomenclatura:** https://raw.githubusercontent.com/victorarimatea/ecossistema-sumario/main/nomenclatura.md
+- **URL do sumário:** https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/sumario.md
+- **URL da nomenclatura:** https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/nomenclatura.md
 
 ---
 
@@ -38,8 +38,8 @@ frases que acionam esta skill:
 Antes de qualquer outra ação, leia os dois arquivos abaixo via
 web_fetch. Nunca pule esta etapa, mesmo que o usuário peça urgência.
 
-GET https://raw.githubusercontent.com/victorarimatea/ecossistema-sumario/main/sumario.md
-GET https://raw.githubusercontent.com/victorarimatea/ecossistema-sumario/main/nomenclatura.md
+GET https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/sumario.md
+GET https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/nomenclatura.md
 
 A partir da leitura, extraia e registre internamente:
 - Lista de repositórios já existentes (para verificar duplicatas)
@@ -206,7 +206,7 @@ Criação do backlog-versoes.md
 Leia o sumario.md atual, adicione a nova entrada na seção [S],
 e faça o commit com o conteúdo atualizado:
 
-PUT https://api.github.com/repos/victorarimatea/ecossistema-sumario/contents/sumario.md
+PUT https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md
 Headers:
 Authorization: token {TOKEN}
 Content-Type: application/json
@@ -219,7 +219,7 @@ Body:
 
 Para obter o SHA atual do arquivo antes de atualizar:
 
-GET https://api.github.com/repos/victorarimatea/ecossistema-sumario/contents/sumario.md
+GET https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md
 
 **6.6 — Atualizar backlog-versoes.md do ecossistema-sumario**
 

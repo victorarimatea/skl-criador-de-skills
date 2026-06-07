@@ -1,7 +1,7 @@
 # skill-criador-de-skills
 
 **Tipo:** Skill (S)
-**Versão atual:** v1.1 — 2026-05-26
+**Versão:** v1.1 — 2026-05-26
 **Mantenedor:** victorarimatea
 **Visibilidade:** Privado
 **Status:** Ativo

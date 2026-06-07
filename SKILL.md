@@ -1,6 +1,6 @@
 # skill-criador-de-skills
 
-**Versão:** v1.0 — 2026-05-26
+**Versão:** v1.1 — 2026-05-26
 **Repositório:** https://github.com/victorarimatea/skl-criador-de-skills
 **Mantenedor:** victorarimatea
 

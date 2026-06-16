@@ -1,336 +1,491 @@
-# skill-criador-de-skills
+# skl-criador-de-skills
 
-**Versão:** v1.1 — 2026-05-26
+**Versão:** v2.0 — 2026-06-16
 **Repositório:** https://github.com/victorarimatea/skl-criador-de-skills
 **Mantenedor:** victorarimatea
 
-Esta skill cria novas skills no ecossistema DTD/SETIS via API do GitHub,
-garantindo conformidade com as Matrizes de Nomenclatura e Sumário.
+Skill fundacional do ecossistema ATLAS. Cria novas skills no ecossistema
+DTD/SETIS/SES-DF — seja como repositório server-side (GitHub) ou como
+pacote client-side (hub-client-side) — garantindo conformidade com a
+nomenclatura, propagação ao sumário e estrutura padronizada.
 
 ---
 
 ## IDENTIDADE DO ECOSSISTEMA
 
 - **Usuário GitHub:** victorarimatea
-- **Repositório âncora:** ecossistema-sumario
-- **URL do sumário:** https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/sumario.md
-- **URL da nomenclatura:** https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/nomenclatura.md
+- **Repositório âncora:** hub-fonte
+- **Sumário canônico:** `https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md`
+- **Nomenclatura canônica:** `https://api.github.com/repos/victorarimatea/hub-fonte/contents/nomenclatura.md`
+- **Repositório client-side:** `https://api.github.com/repos/victorarimatea/hub-client-side/contents/`
+- **Orquestração GitHub:** skl-github-orquestracao (S04) — seguir obrigatoriamente
+
+> **Regra de acesso:** toda leitura de ecossistema usa a Contents API
+> (`api.github.com`). Nunca usar `raw.githubusercontent.com` em sessões
+> com token de escrita — risco de cache CDN (Erro #003 SEV1).
 
 ---
 
 ## QUANDO ESTA SKILL É ACIONADA
 
-Esta skill é acionada quando o usuário solicitar a criação de uma nova
-skill, repositório de skill, ou automação no ecossistema. Exemplos de
-frases que acionam esta skill:
+Frases que ativam esta skill:
 
-- "Cria uma skill para..."
-- "Quero uma nova skill que..."
-- "Precisamos de uma skill de..."
-- "Cria o repositório da skill..."
+- "cria uma skill para..."
+- "quero uma nova skill que..."
+- "precisamos de uma skill de..."
+- "cria o repositório da skill..."
+- "criar versão client-side de [skill]"
+- "quero instalar [skill] no Claude"
+- "gerar pacote instalável de [skill/workflow]"
 
 ---
 
 ## PROTOCOLO DE EXECUÇÃO — SIGA ESTA SEQUÊNCIA EXATAMENTE
 
-### ETAPA 1 — Leitura das Matrizes (obrigatória, sem exceções)
+### ETAPA 0 — Bifurcação: server-side ou client-side?
 
-Antes de qualquer outra ação, leia os dois arquivos abaixo via
-web_fetch. Nunca pule esta etapa, mesmo que o usuário peça urgência.
+Antes de qualquer outra ação, determinar a natureza da skill a criar.
 
-GET https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/sumario.md
-GET https://raw.githubusercontent.com/victorarimatea/hub-fonte/main/nomenclatura.md
+**Perguntar ao usuário se não estiver claro:**
 
-A partir da leitura, extraia e registre internamente:
-- Lista de repositórios já existentes (para verificar duplicatas)
-- Regras de nomenclatura (para validar o nome proposto)
-- Próximo ID disponível na seção [S] do sumário
+> "Esta skill vai operar dentro do ecossistema (repositório GitHub, requer
+> token) ou será um pacote instalável para uso direto no Claude, sem
+> sessão formal (client-side)?"
 
-### ETAPA 2 — Validação do nome proposto
+**Classificação:**
 
-Verifique se o nome proposto pelo usuário:
+| Tipo | Características | Destino |
+|---|---|---|
+| **Server-side** | Lê/escreve no ecossistema; requer token; vive em repositório próprio | Novo repositório `skl-[nome]` no GitHub → ir para ETAPA 1-SERVER |
+| **Client-side** | Opera com ou sem token; embutida no Claude (Project Knowledge); não cria repositório próprio | Arquivo `.md` depositado em `hub-client-side` → ir para ETAPA 1-CLIENT |
 
-a) Já existe no sumário → se sim, informe o usuário e pergunte se
-   quer usar um nome diferente ou atualizar a skill existente
+Se a resposta for ambígua: defaultar para **server-side** e registrar a
+opção client-side como evolução futura no staging.
 
-b) Está em kebab-case minúsculo → se não, proponha a versão correta
+---
 
-c) É autoexplicativo → se não, sugira uma alternativa mais clara
+## FLUXO SERVER-SIDE
 
-d) Começa com o domínio correto para skills → não há prefixo
-   obrigatório, mas nomes como `skill-[função]` são preferíveis
-   para skills genéricas
+### ETAPA 1-SERVER — Leitura das matrizes (obrigatória, sem exceções)
 
-Apresente o resultado da validação ao usuário antes de prosseguir.
+Ler via Contents API com token de leitura:
 
-### ETAPA 3 — Coleta de informações
+```
+GET https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md
+GET https://api.github.com/repos/victorarimatea/hub-fonte/contents/nomenclatura.md
+```
 
-Solicite ao usuário as informações necessárias para criar a skill,
-caso não tenham sido fornecidas:
+Headers obrigatórios:
+```
+Authorization: Bearer {TOKEN_LEITURA}
+Accept: application/vnd.github+json
+```
+
+Decodificar campo `content` de base64:
+```python
+import base64
+conteudo = base64.b64decode(resp["content"].replace("\n", "")).decode("utf-8")
+```
+
+Extrair e registrar internamente:
+- Lista de repositórios já existentes (verificar duplicatas)
+- Regras de nomenclatura (validar nome proposto)
+- Próximo ID disponível na seção Skills (S) do sumário
+
+### ETAPA 2-SERVER — Validação do nome proposto
+
+Verificar se o nome proposto:
+
+a) **Já existe no sumário** → informar o usuário; perguntar se quer nome
+   diferente ou atualizar a skill existente
+
+b) **Está em kebab-case minúsculo** → se não, propor versão correta
+
+c) **Segue o prefixo `skl-`** → prefixo obrigatório para Skills (S) no
+   ecossistema; propor correção se ausente
+
+d) **É autoexplicativo** → se não, sugerir alternativa mais clara
+
+Apresentar resultado da validação ao usuário antes de prosseguir.
+
+### ETAPA 3-SERVER — Coleta de informações
+
+Solicitar ao usuário, se não fornecidas:
 
 - **Nome do repositório** (validado na Etapa 2)
-- **Descrição em uma linha** (será usada no GitHub e no sumário)
+- **Descrição em uma linha** (usada no GitHub e no sumário)
 - **Função principal** (o que a skill faz, em 2-3 frases)
 - **Quando é acionada** (frases ou contextos que disparam a skill)
 - **Dependências** (quais outras skills ou matrizes ela consulta)
+- **Visibilidade** (público ou privado — padrão: **público**)
+- **Gera documentos DOCX/PDF?** (sim → incluir REGRA DE ACENTUAÇÃO no SKILL.md gerado)
 
-### ETAPA 4 — Apresentar plano e solicitar confirmação
+### ETAPA 4-SERVER — Apresentar plano e solicitar confirmação
 
-Antes de executar qualquer ação no GitHub, apresente ao usuário
-um resumo claro do que será feito:
+Antes de executar qualquer ação no GitHub, apresentar:
 
-PLANO DE EXECUÇÃO
-Repositório a criar: [nome]
+```
+PLANO DE EXECUÇÃO — SKILL SERVER-SIDE
+
+Repositório a criar: skl-[nome]
 Descrição: [descrição]
+Visibilidade: [público/privado]
+ID no sumário: S[XX]
+
 Arquivos que serão criados:
+  skl-[nome]/README.md
+  skl-[nome]/SKILL.md
+  skl-[nome]/INDICE.md
+  skl-[nome]/backlog-versoes.md
 
-README.md
-SKILL.md
-backlog-versoes.md
-
-Repositórios que serão atualizados:
-
-ecossistema-sumario/sumario.md (nova entrada [S0X])
-ecossistema-sumario/backlog-versoes.md (registro da criação)
+Arquivos que serão atualizados:
+  hub-fonte/sumario.md — nova entrada S[XX]
+  hub-fonte/backlog-versoes.md — registro da criação
 
 Confirma? (sim/não)
+```
 
-Só prossiga após confirmação explícita do usuário.
+**Só prosseguir após confirmação explícita.**
 
-### ETAPA 5 — Solicitar o token
+### ETAPA 5-SERVER — Token de escrita
 
-Se ainda não tiver o token nesta conversa, solicite:
+Se ainda não disponível na sessão, solicitar o token de escrita.
+Lembrar ao usuário: revogar em https://github.com/settings/tokens
+ao final da sessão.
 
-### ETAPA 6 — Executar via API do GitHub
+### ETAPA 6-SERVER — Execução via API GitHub
 
-Execute as ações nesta ordem exata. A cada erro, pare e informe
-o usuário antes de tentar continuar.
+Usar exclusivamente `urllib.request` em Python. Nunca usar `curl`
+(risco de falha silenciosa com caracteres especiais — Erro #003).
 
 **6.1 — Criar o repositório**
 
-POST https://api.github.com/user/repos
-Headers:
-Authorization: token {TOKEN}
-Content-Type: application/json
-Body:
-{
-"name": "{NOME_REPOSITORIO}",
-"description": "{DESCRICAO}",
-"private": true,
-"auto_init": true
-}
+```python
+import urllib.request, json
 
-Aguarde 2 segundos após criar o repositório antes de criar arquivos.
-O GitHub precisa deste tempo para inicializar o branch main.
+payload = json.dumps({
+    "name": "{NOME}",
+    "description": "{DESCRICAO}",
+    "private": False,   # ajustar se privado
+    "auto_init": False  # nunca auto_init — criar README no primeiro PUT
+}).encode("utf-8")
+
+req = urllib.request.Request(
+    "https://api.github.com/user/repos",
+    data=payload,
+    headers={
+        "Authorization": "Bearer {TOKEN_ESCRITA}",
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json"
+    },
+    method="POST"
+)
+```
 
 **6.2 — Criar README.md**
 
-Use o modelo abaixo, preenchendo os campos com as informações
-coletadas na Etapa 3:
+Modelo obrigatório — preencher campos:
 
-Aguarde 2 segundos após criar o repositório antes de criar arquivos.
-O GitHub precisa deste tempo para inicializar o branch main.
+```markdown
+# [NOME_REPOSITORIO]
 
-**6.2 — Criar README.md**
+**Tipo:** Skill (S[ID])
+**Versão:** v1.0 — [DATA]
+**Mantenedor:** victorarimatea
+**Visibilidade:** [Público/Privado]
+**Status:** Ativo
 
-Use o modelo abaixo, preenchendo os campos com as informações
-coletadas na Etapa 3:
+> [DESCRICAO_LONGA]
 
-POST https://api.github.com/repos/victorarimatea/{NOME}/contents/README.md
-Headers:
-Authorization: token {TOKEN}
-Content-Type: application/json
-Body:
-{
-"message": "Adiciona README.md padronizado",
-"content": "{BASE64_DO_CONTEUDO}"
-}
+## Arquivos deste repositório
 
-Modelo do README.md a ser codificado em base64:
+| Arquivo | Função |
+|---|---|
+| `SKILL.md` | Instrução técnica lida pelo Claude para executar a skill |
+| `INDICE.md` | Mapa de navegação dos arquivos do repositório |
+| `backlog-versoes.md` | Histórico auditável de todas as versões desta skill |
 
-{NOME_REPOSITORIO}
-Tipo: Skill (S)
-Versão atual: v1.0 — {DATA}
-Mantenedor: victorarimatea
-Visibilidade: Privado
-Status: Ativo
+## O que esta skill faz
 
-{DESCRICAO_LONGA}
+[FUNCAO_PRINCIPAL]
 
-Arquivos deste repositório
-ArquivoFunçãoSKILL.mdInstrução técnica lida pelo Claude para executar a skillbacklog-versoes.mdHistórico auditável de todas as versões desta skill
-O que esta skill faz
-{FUNCAO_PRINCIPAL}
-Como acionar esta skill
-{QUANDO_ACIONADA}
-Histórico resumido de versões
-VersãoDataDescriçãov1.0{DATA}Criação inicial da skill
+## Como acionar esta skill
+
+[QUANDO_ACIONADA]
+
+## Bloco para agentes de IA
+
+> **Leitura obrigatória para qualquer agente que opere neste repositório.**
+
+| Marcação | Significado | Comportamento esperado |
+|---|---|---|
+| 🔒 | Interno — relevância de rastreabilidade | Registrar normalmente |
+| 📊 | Estratégico — valor narrativo para SETIS | Destacar em resumos executivos |
+| 🌐 | Público — comunicável externamente | Incluir em materiais de divulgação |
+| 🧪 | Em teste — experimentação ativa, não vinculante | Reportar ao final de cada sessão; não bloqueia operações |
+
+## Histórico resumido de versões
+
+| Versão | Data | Descrição |
+|---|---|---|
+| v1.0 | [DATA] | Criação inicial da skill |
+
+---
+
+## Navegação rápida
+
+→ **[INDICE.md](./INDICE.md)** — mapa completo de todos os arquivos deste repositório
+```
 
 **6.3 — Criar SKILL.md**
 
-O conteúdo do SKILL.md deve ser gerado por você com base nas
-informações coletadas, seguindo a estrutura desta skill como modelo.
-Todo SKILL.md do ecossistema deve ter obrigatoriamente:
+Gerar SKILL.md com base nas informações coletadas.
+Estrutura obrigatória de todo SKILL.md do ecossistema:
 
 - Cabeçalho com versão, repositório e mantenedor
-- Seção IDENTIDADE DO ECOSSISTEMA com as URLs das matrizes
+- Seção IDENTIDADE DO ECOSSISTEMA com URLs via Contents API
 - Seção QUANDO ESTA SKILL É ACIONADA
 - Seção PROTOCOLO DE EXECUÇÃO com etapas numeradas
-- Etapa obrigatória de leitura do sumario.md e nomenclatura.md
-- Etapa obrigatória de verificação própria no sumário
-- Seção REGRA DE ACENTUAÇÃO (copiar da seção homônima desta skill)
+- Etapa obrigatória de leitura do sumario.md e nomenclatura.md via API
+- Etapa obrigatória de verificação de duplicata no sumário
+- Seção INTENÇÃO DO COMANDANTE ao final
 
-ATENÇÃO: toda skill que gera documentos DOCX/PDF deve incluir
-obrigatoriamente a seção REGRA DE ACENTUAÇÃO. Copie o bloco completo
-desta skill para o SKILL.md da nova skill antes de criar o arquivo.
+> **Se a skill gera documentos DOCX/PDF:** incluir obrigatoriamente
+> a seção REGRA DE ACENTUAÇÃO (copiar da S02 ou S03 como modelo).
+> Se não gera DOCX/PDF: **não incluir** — a seção não se aplica.
 
-**6.4 — Criar backlog-versoes.md**
+**6.4 — Criar INDICE.md**
 
-Modelo a ser preenchido:
+Modelo obrigatório:
 
-Backlog de Versões — {NOME_REPOSITORIO}
-v1.0 — {DATA}
-Tipo de alteração: Criação
-Autorizado por: victorarimatea
-Exposição de motivos: Criação inicial da skill {NOME_REPOSITORIO}
-no ecossistema DTD/SETIS. {MOTIVO_DA_CRIACAO}
-Alterações realizadas
+```markdown
+# Índice — [NOME_REPOSITORIO]
 
-Criação do repositório {NOME_REPOSITORIO} (privado)
-Criação do README.md
-Criação do SKILL.md v1.0
-Criação do backlog-versoes.md
+**Tipo:** Skill (S[ID])
+**Última atualização:** [DATA]
 
-**6.5 — Atualizar sumario.md**
-
-Leia o sumario.md atual, adicione a nova entrada na seção [S],
-e faça o commit com o conteúdo atualizado:
-
-PUT https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md
-Headers:
-Authorization: token {TOKEN}
-Content-Type: application/json
-Body:
-{
-"message": "Registra {NOME} no sumário do ecossistema",
-"content": "{BASE64_CONTEUDO_ATUALIZADO}",
-"sha": "{SHA_ATUAL_DO_ARQUIVO}"
-}
-
-Para obter o SHA atual do arquivo antes de atualizar:
-
-GET https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md
-
-**6.6 — Atualizar backlog-versoes.md do ecossistema-sumario**
-
-Mesmo processo do 6.5, adicionando entrada v0.X com:
-- Tipo: Adição
-- Descrição do que foi criado e por quê
-
-### ETAPA 7 — Relatório final
-
-Após todas as ações executadas com sucesso, apresente:
-
-SKILL CRIADA COM SUCESSO
-Repositório: https://github.com/victorarimatea/{NOME}
-Arquivos criados: README.md, SKILL.md, backlog-versoes.md
-Sumário atualizado: entrada {ID} adicionada
-Backlog do ecossistema: versão {VX.Y} registrada
-Próximo passo sugerido: adicione esta skill ao seu
-projeto no Claude para ativá-la.
+> [DESCRICAO_CURTA]
 
 ---
 
-## REGRAS DE COMPORTAMENTO
+## Arquivos na raiz
 
-- **Nunca pule a Etapa 1.** As matrizes são a fonte de verdade.
-- **Nunca execute ações no GitHub sem confirmação explícita** do usuário
-  na Etapa 4.
-- **Nunca armazene o token** além do necessário para a sessão atual.
-- **Sempre pare e informe** o usuário em caso de erro de API antes
-  de tentar continuar.
-- **Sempre verifique o SHA** antes de atualizar um arquivo existente —
-  atualizar sem SHA causa erro 409 na API do GitHub.
-- **Se o sumário estiver desatualizado** em relação ao que o usuário
-  descreve, aponte a inconsistência e solicite autorização para corrigir
-  antes de prosseguir.
-
+| Arquivo | Descrição | Quando consultar |
+|---|---|---|
+| [`SKILL.md`](./SKILL.md) | Instruções completas para o Claude executar a skill | Para executar a skill |
+| [`backlog-versoes.md`](./backlog-versoes.md) | Histórico de versões e alterações | Para rastrear evoluções |
+| [`README.md`](./README.md) | Apresentação do repositório | Para entender o propósito |
+| [`INDICE.md`](./INDICE.md) | Este arquivo | Para navegação rápida |
 
 ---
 
-## REGRA DE ACENTUAÇÃO — DOCUMENTOS EM PORTUGUÊS
-
-Todo documento gerado por esta skill deve passar obrigatoriamente pelo
-processo de correção de acentuação antes da entrega. Sem exceção.
-
-### Por que esta regra existe
-
-O pipeline Node.js + docx library + LibreOffice não garante preservação
-de acentuação UTF-8 de forma consistente. Palavras acentuadas no código
-fonte podem ser corrompidas no ambiente de execução restrito, resultando
-em documentos com mistura de palavras acentuadas e não acentuadas —
-aspecto incompatível com documentos institucionais.
-
-### Protocolo obrigatório de correção (3 etapas)
-
-**Etapa A — Substituição global no script de geração**
-
-Antes de executar o script, aplicar substituição global. Cobertura mínima:
-
-Substantivos institucionais: gestão, revisão, seção, informação, saúde,
-versão, aprovação, análise, transformação, ação, ações, execução,
-elaboração, integração, competência, competências, governança, deliberação,
-publicação, comunicação, legislação, solicitação, manutenção, atualização,
-identificação, consolidação, avaliação, decisão, criação, distribuição,
-capacitação, certificação
-
-Adjetivos: estratégico/a/os/as, técnico/a/os/as, específico/a/os/as,
-público/a/os/as, básico/a/os/as, crítico/a/os/as, histórico/a/os/as,
-obrigatório/a/os/as, próprio/a/os/as, único/a/os/as, próximo/a/os/as
-
-Palavras funcionais: não, também, além, após, há, está, órgão, órgãos,
-área, áreas, número, números, índice, índices
-
-Nomes institucionais: Fórum de Subsecretários, Transformação Digital,
-Saúde Digital, Secretaria de Estado de Saúde, Instrumento de Análise
-Comparativa
-
-**Etapa B — Correção individual de títulos de seção**
-
-Verificar e corrigir cada título individualmente após a substituição
-global. Títulos usam função separada e frequentemente escapam da
-substituição global.
-
-**Etapa C — Verificação automática do DOCX gerado**
-
-Após gerar o DOCX e antes de converter para PDF:
-
-```python
-import zipfile, xml.etree.ElementTree as ET
-with zipfile.ZipFile("arquivo.docx") as z:
-    with z.open("word/document.xml") as f:
-        tree = ET.parse(f)
-root = tree.getroot()
-ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-full = " ".join(t.text for t in root.iter(ns+"t") if t.text)
-sem_acento = [
-    "gestao","revisao","secao","informacao","saude","versao",
-    "aprovacao","analise","transformacao","nao ","recomendacao",
-    "convergencia","conclusao","indice ","forum ","deliberacao",
-    "governanca","competencia","execucao","elaboracao","integracao",
-    "publicacao","comunicacao","atualizacao","avaliacao","decisao"
-]
-encontradas = [w for w in sem_acento if w in full.lower()]
-if encontradas:
-    print(f"ATENÇÃO — palavras sem acento: {encontradas}")
-else:
-    print("Verificação OK — acentuação correta")
+*Mantido por victorarimatea — DTD/SETIS/SES-DF*
 ```
 
-Se encontrar palavras sem acento, corrigir com substituição por contexto
-e repetir a geração antes de prosseguir.
+**6.5 — Criar backlog-versoes.md**
 
-### Regra de entrega
+```markdown
+# Backlog de Versões — [NOME_REPOSITORIO]
 
-Nunca entregar documento sem as 3 etapas concluídas.
-A conversão para PDF só ocorre após Etapa C confirmar zero ocorrências.
+## v1.0 — [DATA]
+
+**Tipo de alteração:** Criação
+**Autorizado por:** victorarimatea
+**Exposição de motivos:** Criação inicial da skill [NOME] no ecossistema
+DTD/SETIS/SES-DF. [MOTIVO_DA_CRIACAO]
+
+### Alterações realizadas
+
+- Criação do repositório `[NOME]` ([público/privado])
+- Criação do `README.md` v1.0
+- Criação do `SKILL.md` v1.0
+- Criação do `INDICE.md`
+- Criação do `backlog-versoes.md`
+- `hub-fonte/sumario.md`: entrada S[ID] adicionada
+```
+
+**6.6 — Atualizar sumario.md do hub-fonte**
+
+Ler SHA imediatamente antes do PUT:
+
+```python
+# GET para obter SHA atual
+req = urllib.request.Request(
+    "https://api.github.com/repos/victorarimatea/hub-fonte/contents/sumario.md",
+    headers={"Authorization": "Bearer {TOKEN}", "Accept": "application/vnd.github+json"}
+)
+# ... decodificar, inserir nova linha na seção Skills, PUT com SHA
+```
+
+Aguardar ≥3s após o PUT antes do GET de confirmação.
+
+**6.7 — Atualizar backlog-versoes.md do hub-fonte**
+
+Mesma disciplina de SHA: GET imediato antes do PUT.
+Nova entrada com tipo "feat", data e descrição da skill criada.
+
+### ETAPA 7-SERVER — Relatório final
+
+```
+SKILL SERVER-SIDE CRIADA
+
+Repositório: https://github.com/victorarimatea/[NOME]
+Arquivos criados: README.md, SKILL.md, INDICE.md, backlog-versoes.md
+Sumário: entrada S[ID] adicionada (hub-fonte/sumario.md)
+Backlog do ecossistema: v[X.Y] registrada
+
+Próximo passo: adicionar SKILL.md ao Project Knowledge do Claude
+para ativar a skill nas sessões.
+```
+
+---
+
+## FLUXO CLIENT-SIDE
+
+### ETAPA 1-CLIENT — Leitura da skill/workflow alvo
+
+A criação de um pacote client-side é uma conversão de um artefato
+server-side existente. Ler obrigatoriamente via Contents API:
+
+1. `hub-fonte/sumario.md` — confirmar repositório e versão atual do alvo
+2. `[repo-alvo]/SKILL.md` ou `[repo-alvo]/WORKFLOW.md` — conteúdo a converter
+3. `[repo-alvo]/INDICE.md` se existir — dependências declaradas
+
+Se o alvo não existir no sumário: interromper e informar o usuário.
+Não criar client-side de algo que não existe como server-side canônico
+(excepcionalmente aprovado pelo mantenedor para protótipos).
+
+### ETAPA 2-CLIENT — Mapeamento de dependências
+
+Classificar todas as dependências da skill alvo:
+
+| Categoria | Definição | Tratamento na client-side |
+|---|---|---|
+| **A — Embutível** | Padrões estáticos, estruturas, taxonomias | Incorporar diretamente no arquivo |
+| **B — Referenciável** | Skills consultadas, glossários, índices | A client-side busca via API quando há token; opera em fallback sem token |
+| **C1 — Bloqueia Modo 1** | Sem token, etapa inoperável de forma confiável | Declarar bloqueio explícito; descrever comportamento sem token |
+| **C2 — Bloqueia Modo 2** | Requer token de leitura | Declarar; fornecer instrução de desbloqueio |
+| **C3 — Bloqueia Modo 3** | Requer token de escrita | Declarar; a client-side nunca escreve por conta própria |
+
+### ETAPA 3-CLIENT — Diagnóstico de viabilidade
+
+Apresentar ao usuário antes de gerar qualquer arquivo:
+
+```
+DIAGNÓSTICO — [Nome da Skill] → Client-Side
+
+Skill alvo: [código] — [nome] — v[versão]
+
+Dependências mapeadas:
+| Dependência | Categoria | Modo afetado | Tratamento proposto |
+|---|---|---|---|
+[linhas]
+
+Viabilidade por modo:
+| Modo | Viabilidade | Limitações |
+|---|---|---|
+| Modo 1 — Sem token      | ✅/⚠️/🚫 | [bloqueios C1] |
+| Modo 2 — Token leitura  | ✅/⚠️/🚫 | [bloqueios C2] |
+| Modo 3 — Token escrita  | ✅/⚠️/🚫 | [bloqueios C3] |
+
+Recomendação: ✅ VIÁVEL / ⚠️ VIÁVEL COM RESTRIÇÕES / 🚫 BLOQUEADO
+```
+
+**Aguardar aprovação explícita antes de prosseguir.**
+
+### ETAPA 4-CLIENT — Geração do arquivo client-side
+
+Gerar o arquivo com estrutura obrigatória:
+
+```markdown
+# SKILL — [Nome]
+**Código:** [CODIGO]-CS
+**Versão local:** v1.0
+**Importada de:** [repositório]/SKILL.md — v[versão] — [data original]
+**Data de importação:** [hoje]
+**Ecossistema:** DTD/SETIS/SES-DF — github.com/victorarimatea
+
+> Nota de design: [o que faz, que é client-side, onde vive o canônico]
+
+---
+
+## Declaração de dependências e modos
+
+| Modo | Requer | Viabilidade | Limitações |
+|---|---|---|---|
+| Modo 1 — Sem token      | nada            | [✅/⚠️/🚫] | [ou "nenhuma"] |
+| Modo 2 — Token leitura  | token leitura   | [✅/⚠️/🚫] | [ou "nenhuma"] |
+| Modo 3 — Token escrita  | leitura+escrita | [✅/⚠️/🚫] | [ou "nenhuma"] |
+
+## Como acionar esta skill
+[frases de ativação]
+
+## Verificação de versão (Modos 2 e 3)
+[comparar versão local com ecossistema e alertar se divergente]
+
+## Padrão embutido (fallback — [skill] v[versão] importada em [data])
+[conteúdo adaptado para uso client-side]
+
+## Modos de operação
+### MODO 1 — Sem token
+### MODO 2 — Com token de leitura
+### MODO 3 — Com token de escrita
+
+## Endereços do ecossistema
+## Intenção do Comandante
+```
+
+Nomenclatura do arquivo: `SKILL-[nome]-clientside.md`
+
+### ETAPA 5-CLIENT — Entrega e depósito
+
+**5a — Entregar no chat** para revisão e aprovação antes de qualquer depósito.
+
+**5b — Depositar em hub-client-side** (requer token de escrita):
+- Caminho: `hub-client-side/SKILL-[nome]-clientside.md`
+- Atualizar `hub-client-side/INDICE.md` com nova entrada
+- **Não** criar repositório separado — client-sides vivem no hub-client-side
+
+**5c — Sem propagação ao sumario.md do hub-fonte:** pacotes client-side
+não são listados individualmente no sumário — o sumário registra apenas
+`hub-client-side` como S08.
+
+### ETAPA 6-CLIENT — Relatório final
+
+```
+PACOTE CLIENT-SIDE CRIADO
+
+Arquivo: SKILL-[nome]-clientside.md
+Depositado em: hub-client-side/
+INDICE.md: atualizado
+
+Próximo passo: copiar o arquivo para o Project Knowledge do Claude.
+```
+
+---
+
+## REGRAS DE COMPORTAMENTO (ambos os fluxos)
+
+- **Nunca pular a leitura das matrizes.** O sumário é a fonte de verdade.
+- **Nunca executar ações no GitHub sem confirmação explícita** do usuário.
+- **Nunca reutilizar SHA** de leitura anterior — buscar SHA imediatamente antes de cada PUT.
+- **Aguardar ≥3s** após todo PUT antes do GET de confirmação (S04 v2.10 — Erro #015).
+- **Sempre fazer GET de confirmação** após cada PUT — verificar campos críticos, não apenas HTTP 200.
+- **Nunca armazenar token** além do necessário para a sessão atual.
+- **Parar e informar** o usuário em caso de qualquer erro de API antes de continuar.
+- **Usar exclusivamente `urllib.request`** em Python para chamadas à API — nunca `curl`.
+- **Client-side nunca escreve no ecossistema** durante execução — apenas o mantenedor deposita via token de escrita em sessão formal.
+
+---
+
+## INTENÇÃO DO COMANDANTE
+
+O estado final desejado desta skill é que qualquer nova skill necessária
+no ecossistema — seja para operar dentro do GitHub com acesso pleno
+(server-side) ou para ser instalada diretamente no Claude e funcionar
+em qualquer contexto (client-side) — nasça em conformidade com os
+padrões do ecossistema ATLAS, com rastreabilidade completa e sem
+dependência de memória manual do mantenedor.
+
+Uma skill bem criada declara sua natureza, conhece seus limites,
+e pode ser auditada de ponta a ponta.
